@@ -5,7 +5,7 @@ services:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     environment:
       PAPERLESS_URL: http://localhost:8001
-      PAPERLESS_SECRET_KEY: change-me
+      PAPERLESS_SECRET_KEY: e2e-test-secret-key-not-for-production
       PAPERLESS_ADMIN_USER: admin
       PAPERLESS_ADMIN_PASSWORD: admin
       PAPERLESS_TIME_ZONE: Europe/Berlin

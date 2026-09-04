@@ -101,7 +101,8 @@ export async function setupTestEnvironment(config?: TestEnvironmentConfig): Prom
       .withNetworkAliases('paperless-ngx')
       .withEnvironment({
         PAPERLESS_URL: `http://localhost:${paperlessPort}`,
-        PAPERLESS_SECRET_KEY: 'change-me',
+        // paperless-ngx rejects the default "change-me" value.
+        PAPERLESS_SECRET_KEY: 'e2e-test-secret-key-not-for-production',
         PAPERLESS_ADMIN_USER: 'admin',
         PAPERLESS_ADMIN_PASSWORD: 'admin',
         PAPERLESS_TIME_ZONE: 'Europe/Berlin',
