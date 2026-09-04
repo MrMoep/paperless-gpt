@@ -250,7 +250,10 @@ export async function uploadDocument(
   
   const task_id = await uploadResponse.json();
   
-  // Poll the tasks endpoint until document is processed
+  // Poll the tasks endpoint until document is processed.
+  // paperless-ngx ≥ task-redesign returns a paginated envelope with lowercase
+  // statuses and related_document_ids; older versions returned a flat array
+  // with uppercase statuses and related_document.
   while (true) {
     console.log(`Checking task status for ID: ${task_id}`);
     const taskResponse = await fetch(`${baseUrl}/api/tasks/?task_id=${task_id}`, {
@@ -263,19 +266,32 @@ export async function uploadDocument(
       throw new Error(`Failed to check task status: ${taskResponse.statusText}`);
     }
 
-    const taskResultArr = await taskResponse.json();
-    console.log(`Task status: ${JSON.stringify(taskResultArr)}`);
+    const taskPayload = await taskResponse.json();
+    console.log(`Task status: ${JSON.stringify(taskPayload)}`);
 
-    if (taskResultArr.length === 0) {
+    const tasks: Array<Record<string, unknown>> = Array.isArray(taskPayload)
+      ? taskPayload
+      : Array.isArray(taskPayload?.results)
+        ? taskPayload.results
+        : [];
+
+    if (tasks.length === 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
       continue;
     }
-    const taskResult = taskResultArr[0];
-    // Check if task is completed
-    if (taskResult.status === 'SUCCESS' && taskResult.id) {
-      console.log(`Document processed successfully with ID: ${taskResult.id}`);
+    const taskResult = tasks[0];
+    const status = String(taskResult.status ?? '').toUpperCase();
+
+    if (status === 'SUCCESS') {
+      const documentId = documentIdFromTask(taskResult);
+      if (documentId == null) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      console.log(`Document processed successfully with ID: ${documentId}`);
       
       // Fetch the complete document details
-      const documentResponse = await fetch(`${baseUrl}/api/documents/${taskResult.id}/`, {
+      const documentResponse = await fetch(`${baseUrl}/api/documents/${documentId}/`, {
         headers: {
           'Authorization': 'Basic ' + btoa(`${credentials.username}:${credentials.password}`),
         },
@@ -288,15 +304,35 @@ export async function uploadDocument(
       return await documentResponse.json();
     }
     
-    // Check for failure
-    if (taskResult.status === 'FAILED') {
-      throw new Error(`Document processing failed: ${taskResult.result}`);
+    // Check for failure (legacy FAILED + redesigned failure)
+    if (status === 'FAILED' || status === 'FAILURE') {
+      const detail = taskResult.result_message ?? taskResult.result ?? JSON.stringify(taskResult);
+      throw new Error(`Document processing failed: ${detail}`);
     }
     
     // Wait before polling again
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 }
+
+function documentIdFromTask(task: Record<string, unknown>): number | null {
+  const relatedIds = task.related_document_ids;
+  if (Array.isArray(relatedIds) && relatedIds.length > 0) {
+    const id = Number(relatedIds[0]);
+    if (!Number.isNaN(id)) return id;
+  }
+  if (task.related_document != null) {
+    const id = Number(task.related_document);
+    if (!Number.isNaN(id)) return id;
+  }
+  const resultData = task.result_data;
+  if (resultData && typeof resultData === 'object') {
+    const id = Number((resultData as { document_id?: unknown }).document_id);
+    if (!Number.isNaN(id)) return id;
+  }
+  return null;
+}
+
 // Helper to create a tag via Paperless-ngx API
 export async function createTag(
   baseUrl: string,
