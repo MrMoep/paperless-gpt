@@ -91,6 +91,33 @@ func getWorkflowByID(id string) (WorkflowConfig, bool) {
 	return WorkflowConfig{}, false
 }
 
+// workflowWantsOCR reports whether a workflow should OCR before metadata.
+func workflowWantsOCR(wf WorkflowConfig) bool {
+	return wf.EnableOCR != nil && *wf.EnableOCR
+}
+
+// validateWorkflowOCRConfig checks OCR-related workflow fields before save.
+// app may be nil when only structural checks are needed (e.g. unit tests).
+func validateWorkflowOCRConfig(app *App, wf WorkflowConfig) error {
+	if wf.OCRLimitPages != nil && *wf.OCRLimitPages < 0 {
+		return fmt.Errorf("ocr_limit_pages must be 0 (no limit) or positive")
+	}
+	prompt := ""
+	if wf.Prompts != nil {
+		prompt = strings.TrimSpace(wf.Prompts["ocr_prompt"])
+	}
+	if prompt == "" {
+		return nil
+	}
+	if app != nil && !app.ocrSupportsPromptOverride() {
+		return fmt.Errorf("ocr_prompt overrides are only supported by the LLM OCR provider")
+	}
+	if _, err := renderOCRPromptOverride(prompt, ""); err != nil {
+		return fmt.Errorf("ocr_prompt does not render: %w", err)
+	}
+	return nil
+}
+
 // resolveGenerationFlags returns a GenerateSuggestionsRequest whose bool flags
 // are resolved from the workflow overrides (if any) on top of the global
 // defaults encoded in the base request.
