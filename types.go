@@ -127,8 +127,15 @@ type WorkflowConfig struct {
 	GenerateCreatedDate    *bool `json:"generate_created_date,omitempty"`
 	GenerateDocumentTypes  *bool `json:"generate_document_types,omitempty"`
 	GenerateCustomFields   *bool `json:"generate_custom_fields,omitempty"`
+	// EnableOCR, when true, runs OCR on the document before metadata generation.
+	// nil or false means OCR is skipped for this workflow.
+	EnableOCR *bool `json:"enable_ocr,omitempty"`
+	// OCRLimitPages overrides the effective OCR page limit for this workflow.
+	// nil = use effective defaults (settings over env); 0 = no limit.
+	OCRLimitPages *int `json:"ocr_limit_pages,omitempty"`
 	// Prompts maps prompt-file names (e.g. "title_prompt") to their template content.
 	// An absent key means the global default prompt is used.
+	// "ocr_prompt" overrides the OCR template when EnableOCR is true.
 	Prompts map[string]string `json:"prompts,omitempty"`
 }
 

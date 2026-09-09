@@ -26,6 +26,8 @@ interface WorkflowConfig {
   generate_created_date?: boolean | null;
   generate_document_types?: boolean | null;
   generate_custom_fields?: boolean | null;
+  enable_ocr?: boolean | null;
+  ocr_limit_pages?: number | null;
   prompts?: Record<string, string>;
 }
 
@@ -36,6 +38,7 @@ const PROMPT_KEYS = [
   { key: "document_type_prompt", label: "Document type prompt" },
   { key: "date_prompt", label: "Created date prompt" },
   { key: "custom_field_prompt", label: "Custom fields prompt" },
+  { key: "ocr_prompt", label: "OCR prompt" },
 ];
 
 const FLAG_KEYS: { key: keyof WorkflowConfig; label: string }[] = [
@@ -56,6 +59,7 @@ const emptyWorkflow = (): WorkflowConfig => ({
   name: "",
   trigger_tag: "",
   completion_tag: "",
+  enable_ocr: false,
   prompts: {},
 });
 
@@ -68,6 +72,8 @@ const cloneWorkflowForDuplicate = (wf: WorkflowConfig): WorkflowConfig => ({
   id: "",
   name: wf.name ? `${wf.name} (copy)` : "",
   trigger_tag: "",
+  enable_ocr: wf.enable_ocr ?? false,
+  ocr_limit_pages: wf.ocr_limit_pages ?? null,
   prompts: { ...(wf.prompts ?? {}) },
 });
 
@@ -193,6 +199,51 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         </p>
       </div>
 
+      {/* OCR before metadata */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold">OCR</h3>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted">Run OCR before metadata</span>
+            <select
+              value={wf.enable_ocr ? "true" : "false"}
+              onChange={(e) =>
+                setWf((p) => ({ ...p, enable_ocr: e.target.value === "true" }))
+              }
+              className="rounded border border-line bg-surface px-2 py-1 text-xs"
+            >
+              <option value="false">Disabled</option>
+              <option value="true">Enabled</option>
+            </select>
+          </div>
+          {wf.enable_ocr && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted">Page limit</span>
+              <input
+                type="number"
+                min={0}
+                className="w-28 rounded border border-line bg-surface px-2 py-1 text-xs font-mono"
+                placeholder="default"
+                value={wf.ocr_limit_pages ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setWf((p) => ({
+                    ...p,
+                    ocr_limit_pages: raw === "" ? null : Number(raw),
+                  }));
+                }}
+              />
+              <p className="text-xs text-faint">0 = no limit; empty = server default</p>
+            </div>
+          )}
+        </div>
+        <p className="mt-2 flex items-center gap-1 text-xs text-faint">
+          <InformationCircleIcon className="h-4 w-4 shrink-0" />
+          When enabled, OCR runs with this workflow&apos;s page limit (and optional OCR
+          prompt) before title/tags/custom fields. No extra OCR tag is required.
+        </p>
+      </div>
+
       {/* Per-workflow prompts */}
       <div>
         <h3 className="mb-3 text-sm font-semibold">Custom prompts</h3>
@@ -265,6 +316,7 @@ const WorkflowCard: React.FC<{
   const overriddenPrompts = Object.keys(wf.prompts ?? {}).filter(
     (k) => (wf.prompts ?? {})[k]?.trim()
   );
+  const ocrEnabled = !!wf.enable_ocr;
 
   return (
     <div className="rounded-lg border border-line bg-surface p-5">
@@ -308,8 +360,14 @@ const WorkflowCard: React.FC<{
           </button>
         </div>
       </div>
-      {(overriddenFlags.length > 0 || overriddenPrompts.length > 0) && (
+      {(overriddenFlags.length > 0 || overriddenPrompts.length > 0 || ocrEnabled) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
+          {ocrEnabled && (
+            <span className="inline-flex items-center rounded-full bg-pos-tint px-2 py-0.5 text-xs font-medium text-pos-ink">
+              ✓ OCR
+              {wf.ocr_limit_pages != null ? ` (${wf.ocr_limit_pages}p)` : ""}
+            </span>
+          )}
           {overriddenFlags.map(({ key, label }) => (
             <span
               key={key}
@@ -432,7 +490,7 @@ const Workflows: React.FC = () => {
           <h1 className="text-xl font-semibold">Workflows</h1>
           <p className="mt-1 text-sm text-muted">
             Each workflow watches a specific paperless-ngx tag and applies its own
-            prompts and generation settings.
+            prompts, generation settings, and optional OCR.
           </p>
         </div>
         {editingId === null && (

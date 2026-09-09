@@ -1117,6 +1117,10 @@ func (app *App) createWorkflowHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "trigger_tag is required"})
 		return
 	}
+	if err := validateWorkflowOCRConfig(app, wf); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	settingsMutex.Lock()
 	defer settingsMutex.Unlock()
@@ -1155,6 +1159,10 @@ func (app *App) updateWorkflowHandler(c *gin.Context) {
 		return
 	}
 	wf.ID = id // enforce path ID
+	if err := validateWorkflowOCRConfig(app, wf); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	settingsMutex.Lock()
 	defer settingsMutex.Unlock()
