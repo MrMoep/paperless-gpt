@@ -9,7 +9,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -202,7 +202,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       {/* OCR before metadata */}
       <div>
         <h3 className="mb-3 text-sm font-semibold">OCR</h3>
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-start gap-6">
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted">Run OCR before metadata</span>
             <select
@@ -210,7 +210,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               onChange={(e) =>
                 setWf((p) => ({ ...p, enable_ocr: e.target.value === "true" }))
               }
-              className="rounded border border-line bg-surface px-2 py-1 text-xs"
+              className="h-8 rounded border border-line bg-surface px-2 text-xs"
             >
               <option value="false">Disabled</option>
               <option value="true">Enabled</option>
@@ -222,7 +222,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               <input
                 type="number"
                 min={0}
-                className="w-28 rounded border border-line bg-surface px-2 py-1 text-xs font-mono"
+                className="h-8 w-28 rounded border border-line bg-surface px-2 font-mono text-xs"
                 placeholder="default"
                 value={wf.ocr_limit_pages ?? ""}
                 onChange={(e) => {
@@ -406,6 +406,7 @@ const Workflows: React.FC = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [promptFilter, setPromptFilter] = useState<PromptFilter>("all");
+  const inlineEditorRef = useRef<HTMLDivElement | null>(null);
 
   const fetchWorkflows = async () => {
     try {
@@ -421,6 +422,18 @@ const Workflows: React.FC = () => {
   useEffect(() => {
     fetchWorkflows();
   }, []);
+
+  // Keep the inline editor in view inside the scrollable <main> pane.
+  useEffect(() => {
+    if (!editingId || editingId === "new") return;
+    const node = inlineEditorRef.current;
+    if (!node) return;
+    // rAF: wait until the tall editor has replaced the card in the layout.
+    const id = requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editingId, editorKey]);
 
   const openNew = (initial: WorkflowConfig = emptyWorkflow()) => {
     setDraft(initial);
@@ -578,13 +591,18 @@ const Workflows: React.FC = () => {
           {filteredWorkflows.map((wf) => (
             <div key={wf.id}>
               {editingId === wf.id ? (
-                <WorkflowEditor
-                  key={editorKey || wf.id}
-                  initial={wf}
-                  isNew={false}
-                  onSave={handleSave}
-                  onCancel={closeEditor}
-                />
+                <div
+                  ref={inlineEditorRef}
+                  className="scroll-mt-4"
+                >
+                  <WorkflowEditor
+                    key={editorKey || wf.id}
+                    initial={wf}
+                    isNew={false}
+                    onSave={handleSave}
+                    onCancel={closeEditor}
+                  />
+                </div>
               ) : deleteConfirmId === wf.id ? (
                   <div className="rounded-lg border border-neg-line bg-neg-tint p-4 text-sm">
                     <p className="font-medium text-neg-ink">
