@@ -517,19 +517,19 @@ const Workflows: React.FC = () => {
         </div>
       )}
 
-      {/* New / edit form */}
-      {editingId !== null && editingWorkflow !== null && (
+      {/* New workflow form stays at the top (user just clicked New / Duplicate). */}
+      {editingId === "new" && editingWorkflow !== null && (
         <WorkflowEditor
-          key={editorKey || editingId}
+          key={editorKey || "new"}
           initial={editingWorkflow}
-          isNew={editingId === "new"}
+          isNew
           onSave={handleSave}
           onCancel={closeEditor}
         />
       )}
 
-      {/* Filters */}
-      {!loading && workflows.length > 0 && editingId === null && (
+      {/* Filters stay available while editing so the list position stays stable. */}
+      {!loading && workflows.length > 0 && editingId !== "new" && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlassIcon
@@ -568,17 +568,24 @@ const Workflows: React.FC = () => {
             Create one to process documents with a custom prompt and settings.
           </p>
         </div>
-      ) : filteredWorkflows.length === 0 && editingId === null ? (
+      ) : filteredWorkflows.length === 0 && editingId !== "new" ? (
         <p className="text-sm text-muted">
           No workflows match
           {filtersActive ? " the current filters" : ""}.
         </p>
       ) : (
         <div className="space-y-4">
-          {filteredWorkflows.map((wf) =>
-            editingId === wf.id ? null : (
-              <div key={wf.id}>
-                {deleteConfirmId === wf.id ? (
+          {filteredWorkflows.map((wf) => (
+            <div key={wf.id}>
+              {editingId === wf.id ? (
+                <WorkflowEditor
+                  key={editorKey || wf.id}
+                  initial={wf}
+                  isNew={false}
+                  onSave={handleSave}
+                  onCancel={closeEditor}
+                />
+              ) : deleteConfirmId === wf.id ? (
                   <div className="rounded-lg border border-neg-line bg-neg-tint p-4 text-sm">
                     <p className="font-medium text-neg-ink">
                       Delete workflow "{wf.name || wf.id}"?
@@ -606,11 +613,12 @@ const Workflows: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                ) : (
+              ) : (
                   <WorkflowCard
                     wf={wf}
                     onEdit={() => {
                       setEditingId(wf.id);
+                      setEditorKey((k) => k + 1);
                       setDraft(null);
                       setDeleteConfirmId(null);
                     }}
@@ -621,10 +629,9 @@ const Workflows: React.FC = () => {
                       setDraft(null);
                     }}
                   />
-                )}
-              </div>
-            )
-          )}
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
