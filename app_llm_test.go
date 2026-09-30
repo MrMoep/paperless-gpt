@@ -638,6 +638,14 @@ func TestGetSuggestedTags_SystemTagsNeverSuggested(t *testing.T) {
 			failTag, autoTagComplete, pdfOCRCompleteTag = "paperless-gpt-failed", "paperless-gpt-auto-complete", "paperless-gpt-ocr-complete"
 			previousCreateNewTags := createNewTags
 			createNewTags = createNew
+			isolateWorkflowSettings(t)
+			settingsMutex.Lock()
+			settings.Workflows = []WorkflowConfig{{
+				ID:            "inv",
+				TriggerTag:    "paperless-gpt-invoices",
+				CompletionTag: "paperless-gpt-invoices-done",
+			}}
+			settingsMutex.Unlock()
 			t.Cleanup(func() {
 				manualTag, autoTag, autoOcrTag = previous.manual, previous.auto, previous.ocrAuto
 				failTag, autoTagComplete, pdfOCRCompleteTag = previous.fail, previous.complete, previous.ocrComplete
@@ -648,15 +656,18 @@ func TestGetSuggestedTags_SystemTagsNeverSuggested(t *testing.T) {
 			tagTemplate = template.Must(template.New("tag").Parse(testTagTemplate))
 			t.Cleanup(func() { tagTemplate = previousTemplate })
 
+			excluded := append([]string{}, systemTagNames...)
+			excluded = append(excluded, "paperless-gpt-invoices", "paperless-gpt-invoices-done")
+
 			// The model echoes back every system tag plus one real one — the
 			// worst case, and what actually happens when the system tags are
 			// visible in the prompt.
-			mockLLM := &mockLLM{Response: strings.Join(append(systemTagNames, "Invoice"), ",")}
+			mockLLM := &mockLLM{Response: strings.Join(append(excluded, "Invoice"), ",")}
 			app := &App{LLM: mockLLM}
 
 			// Available tags as paperless-ngx would report them: real tags and
 			// paperless-gpt's own, since they all live in the same namespace.
-			availableTags := append([]string{"Invoice", "Insurance"}, systemTagNames...)
+			availableTags := append([]string{"Invoice", "Insurance"}, excluded...)
 			// The document carries the trigger tag it is being processed under.
 			originalTags := []string{"Insurance", "paperless-gpt-auto"}
 
@@ -666,7 +677,7 @@ func TestGetSuggestedTags_SystemTagsNeverSuggested(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			for _, systemTag := range systemTagNames {
+			for _, systemTag := range excluded {
 				assert.NotContains(t, suggested, systemTag,
 					"system tag %q must never be suggested", systemTag)
 			}
@@ -675,7 +686,7 @@ func TestGetSuggestedTags_SystemTagsNeverSuggested(t *testing.T) {
 			assert.Contains(t, suggested, "Insurance")
 
 			// And they must not have been offered to the model either.
-			for _, systemTag := range systemTagNames {
+			for _, systemTag := range excluded {
 				assert.NotContains(t, mockLLM.lastPrompt, systemTag,
 					"system tag %q must not appear in the prompt", systemTag)
 			}
