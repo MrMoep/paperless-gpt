@@ -211,6 +211,8 @@ func main() {
 		}
 	}
 
+	ensureWorkflowTagsExist(ctx, client.EnsureTagExists)
+
 	// Initial fetch of custom fields
 	refreshCustomFieldsCache(client)
 
@@ -981,8 +983,9 @@ func removeTagFromList(tags []string, tagToRemove string) []string {
 }
 
 // systemTags returns every tag paperless-gpt manages itself: the triggers it
-// watches for and the markers it writes. None of them describe a document, so
-// none of them belong in a suggestion prompt.
+// watches for and the markers it writes, including per-workflow trigger and
+// completion tags. None of them describe a document, so none of them belong
+// in a suggestion prompt.
 //
 // Configured-empty tags are skipped, because "" would otherwise match nothing
 // useful and only obscures intent.
@@ -995,11 +998,16 @@ func systemTags() []string {
 		autoTagComplete,
 		pdfOCRCompleteTag,
 	}
+	configured = append(configured, workflowManagedTags()...)
+	seen := make(map[string]bool, len(configured))
 	tags := make([]string, 0, len(configured))
 	for _, tag := range configured {
-		if tag != "" {
-			tags = append(tags, tag)
+		key := strings.ToLower(tag)
+		if tag == "" || seen[key] {
+			continue
 		}
+		seen[key] = true
+		tags = append(tags, tag)
 	}
 	return tags
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -89,6 +90,41 @@ func getWorkflowByID(id string) (WorkflowConfig, bool) {
 		}
 	}
 	return WorkflowConfig{}, false
+}
+
+// workflowManagedTags returns trigger and completion tags from configured
+// workflows. Empty names are omitted. The caller must not hold settingsMutex
+// exclusively; this takes a read lock.
+func workflowManagedTags() []string {
+	settingsMutex.RLock()
+	defer settingsMutex.RUnlock()
+	return workflowManagedTagsLocked()
+}
+
+func workflowManagedTagsLocked() []string {
+	var tags []string
+	for _, wf := range settings.Workflows {
+		if wf.TriggerTag != "" {
+			tags = append(tags, wf.TriggerTag)
+		}
+		if wf.CompletionTag != "" {
+			tags = append(tags, wf.CompletionTag)
+		}
+	}
+	return tags
+}
+
+// ensureWorkflowTagsExist creates each workflow trigger/completion tag in
+// paperless-ngx so name→ID resolution does not silently drop them.
+func ensureWorkflowTagsExist(ctx context.Context, ensure func(context.Context, string) error) {
+	if ensure == nil {
+		return
+	}
+	for _, tag := range workflowManagedTags() {
+		if err := ensure(ctx, tag); err != nil {
+			log.Warnf("Failed to ensure workflow tag %q exists: %v. Processing will still run, but applying this tag may fail until it exists in paperless-ngx.", tag, err)
+		}
+	}
 }
 
 // workflowWantsOCR reports whether a workflow should OCR before metadata.
